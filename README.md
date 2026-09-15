@@ -80,4 +80,11 @@ PDF가 2단 편집이면 `--columns 2`를, 파싱이 이상하면 `--dump out.tx
 
 ## 배포
 
-정적 파일이므로 GitHub Pages, Render Static Site, Netlify 어디든 폴더째 올리면 됩니다. 휴대폰에서도 같은 주소로 접속해 풀 수 있습니다(기록은 기기별 저장).
+GitHub Pages로 배포되어 있습니다: https://proproypro.github.io/sonsa-quiz/ (저장소 proproypro/sonsa-quiz, main 브랜치 루트).
+수정 후 아래 명령으로 올리면 1~2분 뒤 반영됩니다.
+
+```bash
+git add . && git commit -m "업데이트" && git push
+```
+
+휴대폰에서도 같은 주소로 접속해 풀 수 있습니다(기록은 기기별 저장). `data/raw`(원본 zip·PDF)는 .gitignore로 제외되어 올라가지 않습니다.
