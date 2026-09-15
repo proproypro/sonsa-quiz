@@ -50,6 +50,8 @@
   const fmtTime = sec => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
   const isCorrect = (q, n) => n === q.answer || (Array.isArray(q.accept) && q.accept.includes(n));
   const answerLabel = q => (q.accept || [q.answer]).map(a => CIRCLED[a - 1]).join(',');
+  // '__텍스트__' 표기는 밑줄로 표시
+  const fmt = text => { const frag = document.createDocumentFragment(); String(text).split(/__(.+?)__/g).forEach((part, i) => { if (!part) return; if (i % 2) { const u = document.createElement('u'); u.textContent = part; frag.append(u); } else frag.append(document.createTextNode(part)); }); return frag; };
   const srcLabel = q => q.year ? `${q.year}년 제${q.round}회 · ${q.subject} ${q.num}번` : `${q.source || '예시'} · ${q.subject}`;
 
   /* ---------- 문제 선택 ---------- */
@@ -238,7 +240,7 @@
       let cls = 'choice';
       if (showFeedback) { if (isCorrect(q, n)) cls += ' correct'; else if (n === answered) cls += ' wrong'; }
       else if (n === answered) cls += ' selected';
-      return el('button', { class: cls, disabled: showFeedback ? 'disabled' : null, onclick: () => choose(q, n) }, el('span', { class: 'n' }, n), el('span', {}, c));
+      return el('button', { class: cls, disabled: showFeedback ? 'disabled' : null, onclick: () => choose(q, n) }, el('span', { class: 'n' }, n), el('span', {}, fmt(c)));
     }));
 
     const fb = showFeedback ? el('div', { class: 'feedback ' + (isCorrect(q, answered) ? 'ok' : 'bad') },
@@ -254,7 +256,7 @@
 
     const card = el('div', { class: 'card' }, head, bar,
       el('div', { class: 'row', style: 'margin-bottom:4px' }, el('span', { class: 'pill s' + subjIdx(q.subject) }, q.subject), el('span', { class: 'muted' }, srcLabel(q))),
-      el('div', { class: 'q-text' }, q.question),
+      el('div', { class: 'q-text' }, fmt(q.question)),
       choices, fb, navBtns
     );
     app.innerHTML = '';
@@ -343,8 +345,8 @@
   function reviewItem(q, mine) {
     return el('div', { class: 'list-item' },
       el('div', { class: 'row' }, el('span', { class: 'pill s' + subjIdx(q.subject) }, q.subject), el('span', { class: 'muted' }, srcLabel(q))),
-      el('div', { class: 't' }, q.question),
-      el('div', { style: 'font-size:14px' }, q.choices.map((c, i) => el('div', { style: (isCorrect(q, i + 1) ? 'color:var(--ok);font-weight:700' : (i + 1 === mine ? 'color:var(--bad)' : 'color:var(--muted)')) }, `${CIRCLED[i]} ${c}`))),
+      el('div', { class: 't' }, fmt(q.question)),
+      el('div', { style: 'font-size:14px' }, q.choices.map((c, i) => el('div', { style: (isCorrect(q, i + 1) ? 'color:var(--ok);font-weight:700' : (i + 1 === mine ? 'color:var(--bad)' : 'color:var(--muted)')) }, CIRCLED[i] + ' ', fmt(c)))),
       el('div', { class: 'muted', style: 'margin-top:6px' }, `정답 ${answerLabel(q)}${mine ? ' · 내 답 ' + CIRCLED[mine - 1] : ' · 미응답'}`),
       q.explanation ? el('div', { class: 'feedback ok', style: 'margin-top:8px' }, q.explanation) : null
     );
