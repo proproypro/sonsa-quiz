@@ -173,6 +173,18 @@ def build():
             if q["id"] in seen:
                 continue
             seen.add(q["id"]); bank.append(q)
+    # 수동 보정: data/overrides.json 의 항목을 id 기준으로 덮어쓴다 (question/choices/answer/accept/explanation)
+    ov_path = ROOT / "data" / "overrides.json"
+    if ov_path.exists():
+        overrides = {o["id"]: o for o in json.loads(ov_path.read_text(encoding="utf-8"))}
+        by_id = {q["id"]: q for q in bank}
+        for qid, o in overrides.items():
+            if qid in by_id:
+                by_id[qid].update({k: v for k, v in o.items() if k != "id"})
+            elif o.get("question") and o.get("choices") and o.get("answer"):
+                bank.append(o)
+        bank = [q for q in bank if q.get("answer") and len([c for c in q.get("choices", []) if c]) >= 2]
+        print(f"[보정] overrides.json {len(overrides)}건 적용")
     (ROOT / "data" / "questions.json").write_text(json.dumps(bank, ensure_ascii=False, indent=1), encoding="utf-8")
     (ROOT / "data" / "questions.js").write_text("window.QUESTION_BANK = " + json.dumps(bank, ensure_ascii=False) + ";\n", encoding="utf-8")
     by = {s: sum(1 for q in bank if q["subject"] == s) for s in SUBJECTS}

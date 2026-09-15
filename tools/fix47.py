@@ -74,12 +74,13 @@ def page_rows(page, ocr_words, dpi):
         ocr.append({"cx": (w["x0"] + w["x1"]) / 2 * k, "cy": (w["y0"] + w["y1"]) / 2 * k, "x0": w["x0"] * k, "x1": w["x1"] * k, "t": t, "raw": raw})
 
     items = []
-    for b in page.get_text("dict")["blocks"]:
+    for b in page.get_text("rawdict")["blocks"]:
         for ln in b.get("lines", []):
-            t = "".join(s["text"] for s in ln["spans"]).strip()
-            if t:
+            chars = [(c["bbox"][0], c["bbox"][2], c["c"]) for sp in ln["spans"] for c in sp["chars"]]
+            t = "".join(c[2] for c in chars)
+            if t.strip():
                 x0, y0, x1, y1 = ln["bbox"]
-                items.append({"y0": y0, "y1": y1, "x0": x0, "x1": x1, "kind": "txt", "text": t})
+                items.append({"y0": y0, "y1": y1, "x0": x0, "x1": x1, "kind": "txt", "text": t.strip(), "chars": chars})
     for info in page.get_image_info():
         r = pymupdf.Rect(info["bbox"])
         if r.width < 3 or r.height < 6 or r.height > 30 or r.width > W * 0.45 or r.y1 < 100:
@@ -113,6 +114,31 @@ def page_rows(page, ocr_words, dpi):
                 if it["kind"] == "img" and (it["x1"] - it["x0"]) <= 26 and nxt["kind"] == "txt" \
                         and it["x0"] - prev["x1"] >= 8 and nxt["x0"] - it["x1"] <= 5:
                     it["kind"] = "c"; it["wide"] = False
+            # 텍스트 줄 내부의 원문자(OCR 위치)에서 줄 나누기
+            if any(it["kind"] == "c" for it in its):
+                CIRCLED_RAW = re.compile(r"^[①-⑳㉠-㉿ⓐ-ⓩ]+$")
+                circ = sorted([w for w in ocr if CIRCLED_RAW.match(w["raw"]) and y0 - 2 <= w["cy"] <= y1 + 2], key=lambda w: w["cx"])
+                new_its = []
+                for it in its:
+                    if it["kind"] != "txt" or not it.get("chars"):
+                        new_its.append(it); continue
+                    cur = it
+                    for w in circ:
+                        if not (cur["x0"] + 4 < w["cx"] < cur["x1"] - 4):
+                            continue
+                        chars = cur["chars"]
+                        idx = next((i for i, c in enumerate(chars) if c[0] >= w["cx"] - 3), None)
+                        if idx is None or idx == 0:
+                            continue
+                        left, right = chars[:idx], chars[idx:]
+                        lt, rt = "".join(c[2] for c in left).strip(), "".join(c[2] for c in right).strip()
+                        if not lt or not rt:
+                            continue
+                        new_its.append({"y0": cur["y0"], "y1": cur["y1"], "x0": left[0][0], "x1": left[-1][1], "kind": "txt", "text": lt, "chars": left})
+                        new_its.append({"y0": cur["y0"], "y1": cur["y1"], "x0": w["x0"], "x1": w["x1"], "kind": "c", "wide": False, "text": ""})
+                        cur = {"y0": cur["y0"], "y1": cur["y1"], "x0": right[0][0], "x1": right[-1][1], "kind": "txt", "text": rt, "chars": right}
+                    new_its.append(cur)
+                its = sorted(new_its, key=lambda it: it["x0"])
             # 보기 두 개가 한 줄: 보기 행에서 큰 간격 뒤에 두 번째 열 위치(≈220/520pt)에서 시작하는 텍스트 앞에 마커 삽입
             if any(it["kind"] == "c" for it in its):
                 second_x = 220 if col == 0 else 520
@@ -122,7 +148,11 @@ def page_rows(page, ocr_words, dpi):
                     prev_txt = [p for p in its[:idx] if p["kind"] == "txt"]
                     prev_x1 = max(p["x1"] for p in prev_txt) if prev_txt else 0
                     txt_count = sum(1 for p in its if p["kind"] == "txt")
-                    if it["kind"] == "txt" and prev_txt and it["x0"] - prev_x1 >= 8 \
+                    # 간격 안에 좁은 이미지 조각(숫자 등)이 들어 있으면 보기 경계가 아니라 숫자 자리
+                    gap_words = [w for w in ocr if y0 - 2 <= w["cy"] <= y1 + 2 and w["x1"] >= prev_x1 - 3 and w["x0"] <= it["x0"] + 3]
+                    digit_gap = any(re.search(r"[0-9]", w["raw"]) for w in gap_words) or \
+                        any(p["kind"] == "img" and (p["x1"] - p["x0"]) <= 30 and p["x0"] >= prev_x1 - 2 and p["x1"] <= it["x0"] + 2 for p in its)
+                    if it["kind"] == "txt" and prev_txt and it["x0"] - prev_x1 >= 8 and not digit_gap \
                             and (abs(it["x0"] - second_x) <= 40 or (txt_count == 2 and it["x0"] - prev_x1 >= 12)) \
                             and not any(p["kind"] == "c" and p["x0"] > 150 for p in its):
                         extra.append({"y0": it["y0"], "y1": it["y1"], "x0": it["x0"] - 1, "x1": it["x0"], "kind": "c", "wide": False, "text": ""})
@@ -153,7 +183,7 @@ def page_rows(page, ocr_words, dpi):
                     a += "?" if re.search(r"(은|는|가|까|요|지)$", a) else "."
             a = PAGE_TAG_RE.sub("", a).strip()
             a = re.sub(r"(것은|것은가|하는가|인가|한가|않은|옳은|없는가|있는가)[0-9gq]{1,2}$", r"\1?", a)
-            a = re.sub(r"(있는|없는|되는|하는|아닌|않은|옳은)[0-9]{1,2}(?=\s)", r"\1", a)
+            a = re.sub(r"(있는|없는|되는|하는|아닌|않은|옳은)[0-9gq]{1,2}(?=\s)", r"\1", a)
             if QMARK not in a and CMARK not in a:
                 if not a or RULE_RE.match(a) or (HEADER_RE.search(a) and len(a) < 40) or re.fullmatch(r"[\s▢\d쪽\-–]*", a):
                     continue

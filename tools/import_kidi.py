@@ -112,11 +112,12 @@ def join_wrap(prev: str, nxt: str) -> str:
     if not prev:
         return nxt
     if HANGUL.match(prev[-1]) and HANGUL.match(nxt[:1]):
-        # 앞 줄이 조사·어미로 끝나면 어절 경계에서 줄이 바뀐 것으로 보고 띄어 쓴다
-        if prev[-1] in WRAP_SPACE_ENDINGS:
-            return prev + " " + nxt
-        return prev + nxt
+        # 한글-한글 줄바꿈: 띄어쓰기 여부를 tools/respace.py(형태소 분석)가 나중에 판단하도록 표식을 남긴다
+        return prev + WRAP_SEP + nxt
     return prev + " " + nxt
+
+
+WRAP_SEP = "⁣"
 
 
 WRAP_SPACE_ENDINGS = set("은는이가을를의에로과와도서게고며면여어아다한된될등및중시후전내외상각그때만")
