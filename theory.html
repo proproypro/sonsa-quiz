@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>손해사정사 1차 기본이론</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .layout { display: grid; grid-template-columns: 240px 1fr; gap: 20px; align-items: start; }
+  .side { position: sticky; top: 64px; max-height: calc(100vh - 80px); overflow: auto; }
+  .side .subj { font-weight: 800; margin: 12px 0 6px; font-size: 14px; }
+  .side a.ch { display: block; padding: 6px 10px; border-radius: 8px; font-size: 14px; color: var(--muted); }
+  .side a.ch:hover, .side a.ch.active { background: var(--primary-soft); color: var(--primary); }
+  .search { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; margin-bottom: 8px; }
+  .item { padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .item:last-child { border-bottom: 0; }
+  .item h4 { margin: 0 0 8px; font-size: 16px; }
+  .item ul { margin: 0; padding-left: 20px; }
+  .item li { margin: 4px 0; word-break: keep-all; }
+  .item .law { color: var(--primary); font-size: 12px; font-weight: 700; margin-left: 6px; }
+  .item table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0; }
+  .item th, .item td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  .item th { background: var(--bg); }
+  .tip { background: var(--warn-soft); border-radius: 8px; padding: 8px 12px; font-size: 14px; margin-top: 8px; }
+  mark { background: #fff2a8; padding: 0 2px; }
+  .chap-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } .side { position: static; max-height: none; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="index.html" class="brand">손사 1차 <span>기본이론</span></a>
+  <nav class="topnav">
+    <a href="index.html">문제풀기</a>
+    <a href="#" class="active">이론</a>
+  </nav>
+</header>
+
+<main class="container">
+  <div class="layout">
+    <aside class="side card" id="side"></aside>
+    <section id="content"></section>
+  </div>
+</main>
+
+<footer class="foot">
+  <span>요약 정리는 상법 보험편·보험업법(2026년 기준)과 손해사정 일반이론을 바탕으로 작성한 학습용 자료입니다. 최신 개정 사항은 국가법령정보센터(law.go.kr)에서 확인하세요.</span>
+</footer>
+
+<script src="data/theory.js?v=2"></script>
+<script>
+(function () {
+  const T = window.THEORY || [];
+  const side = document.getElementById('side');
+  const content = document.getElementById('content');
+  const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  let query = '';
+
+  function hl(text) {
+    if (!query) return esc(text);
+    const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    return esc(text).replace(re, m => `<mark>${m}</mark>`);
+  }
+  function chapterId(si, ci) { return `s${si}c${ci}`; }
+  function practiceLink(ch) {
+    const kws = [ch.title, ...(ch.keywords || [])].join('|');
+    return `index.html#kw=${encodeURIComponent(kws)}`;
+  }
+
+  function renderSide() {
+    side.innerHTML = '';
+    const inp = document.createElement('input');
+    inp.className = 'search'; inp.placeholder = '검색 (예: 고지의무, 30일)'; inp.value = query;
+    inp.addEventListener('input', () => { query = inp.value.trim(); renderContent(); });
+    side.append(inp);
+    T.forEach((s, si) => {
+      const h = document.createElement('div'); h.className = 'subj'; h.textContent = s.subject; side.append(h);
+      s.chapters.forEach((c, ci) => {
+        const a = document.createElement('a'); a.className = 'ch'; a.href = '#' + chapterId(si, ci); a.textContent = c.title;
+        a.addEventListener('click', () => { query = ''; inp.value = ''; renderContent(chapterId(si, ci)); });
+        side.append(a);
+      });
+    });
+  }
+
+  function itemHtml(it) {
+    const body = (it.points || []).map(p => `<li>${hl(p)}</li>`).join('');
+    const table = it.table ? `<table><thead><tr>${it.table[0].map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${it.table.slice(1).map(r => `<tr>${r.map(c => `<td>${hl(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '';
+    const tip = it.tip ? `<div class="tip">💡 ${hl(it.tip)}</div>` : '';
+    return `<div class="item"><h4>${hl(it.title)}${it.law ? `<span class="law">${esc(it.law)}</span>` : ''}</h4><ul>${body}</ul>${table}${tip}</div>`;
+  }
+  function matches(it) {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    const txt = [it.title, it.law, ...(it.points || []), it.tip || '', ...(it.table ? it.table.flat() : [])].join(' ').toLowerCase();
+    return txt.includes(q);
+  }
+
+  function renderContent(focus) {
+    content.innerHTML = '';
+    let any = false;
+    T.forEach((s, si) => {
+      s.chapters.forEach((c, ci) => {
+        const items = c.items.filter(matches);
+        if (!items.length) return;
+        any = true;
+        const card = document.createElement('div'); card.className = 'card'; card.id = chapterId(si, ci);
+        card.innerHTML = `<div class="chap-head"><div><span class="pill s${si}">${esc(s.subject)}</span> <h2 style="display:inline;margin-left:6px">${hl(c.title)}</h2></div><a class="btn sm" href="${practiceLink(c)}">이 주제 기출 풀기 →</a></div>${c.intro ? `<div class="muted" style="margin:6px 0 4px">${hl(c.intro)}</div>` : ''}${items.map(itemHtml).join('')}`;
+        content.append(card);
+      });
+    });
+    if (!any) content.innerHTML = '<div class="card"><div class="empty">검색 결과가 없습니다.</div></div>';
+    document.querySelectorAll('.side a.ch').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + focus));
+    if (focus) { const t = document.getElementById(focus); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  }
+
+  renderSide();
+  renderContent(location.hash ? location.hash.slice(1) : null);
+})();
+</script>
+</body>
+</html>
